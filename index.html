@@ -1,0 +1,628 @@
+<!-- <!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline';"
+    />
+    <title>Secure Exam Launcher</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .container {
+        max-width: 700px;
+        width: 90%;
+        background: rgba(255, 255, 255, 0.1);
+        padding: 40px;
+        border-radius: 20px;
+        backdrop-filter: blur(15px);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        text-align: center;
+      }
+
+      .logo {
+        font-size: 48px;
+        margin-bottom: 20px;
+      }
+
+      h1 {
+        font-size: 28px;
+        margin-bottom: 20px;
+        font-weight: 300;
+      }
+
+      .description {
+        font-size: 16px;
+        margin-bottom: 30px;
+        line-height: 1.6;
+        opacity: 0.9;
+      }
+
+      .status-box {
+        background: rgba(0, 0, 0, 0.3);
+        padding: 20px;
+        border-radius: 10px;
+        margin: 20px 0;
+        min-height: 60px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        font-weight: 500;
+      }
+
+      .button {
+        background: linear-gradient(45deg, #4caf50, #45a049);
+        color: white;
+        border: none;
+        padding: 15px 40px;
+        font-size: 18px;
+        border-radius: 50px;
+        cursor: pointer;
+        margin: 10px;
+        transition: all 0.3s ease;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+
+      .button:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+      }
+
+      .button:disabled {
+        background: #666;
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      .button.emergency {
+        background: linear-gradient(45deg, #f44336, #d32f2f);
+      }
+
+      .features {
+        margin-top: 30px;
+        text-align: left;
+      }
+
+      .features h3 {
+        text-align: center;
+        margin-bottom: 20px;
+        font-size: 20px;
+      }
+
+      .features ul {
+        list-style: none;
+        padding: 0;
+      }
+
+      .features li {
+        padding: 8px 0;
+        padding-left: 25px;
+        position: relative;
+        font-size: 14px;
+      }
+
+      .features li:before {
+        content: "✓";
+        position: absolute;
+        left: 0;
+        color: #4caf50;
+        font-weight: bold;
+        font-size: 16px;
+      }
+
+      .loading {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 3px solid rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        border-top-color: #fff;
+        animation: spin 1s ease-in-out infinite;
+        margin-right: 10px;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      .hidden {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="logo">🔒</div>
+      <h1>Secure Exam Launcher</h1>
+      <div class="description">
+        This application will secure your computer for the exam and launch Safe
+        Exam Browser automatically. All restrictions will be removed after the
+        exam is completed.
+      </div>
+
+      <div class="status-box" id="statusBox">
+        <span id="statusText">Ready to start exam setup</span>
+      </div>
+
+      <div id="mainButtons">
+        <button class="button" id="startExamBtn">Start Secure Exam</button>
+        <button class="button emergency" id="emergencyBtn">
+          Emergency Restore
+        </button>
+      </div>
+
+      <div class="features">
+        <h3>Security Features Applied</h3>
+        <ul>
+          <li>Blocks USB devices and external storage</li>
+          <li>Disables Task Manager and Registry Editor</li>
+          <li>Restricts network access to exam site only</li>
+          <li>Disables Bluetooth and wireless hotspot</li>
+          <li>Blocks remote desktop applications (AnyDesk, TeamViewer)</li>
+          <li>Disables Windows key shortcuts and Run dialog</li>
+          <li>Launches Safe Exam Browser automatically</li>
+          <li>Restores all settings after exam completion</li>
+        </ul>
+      </div>
+    </div>
+
+    <script>
+      const { ipcRenderer } = require("electron");
+
+      const startExamBtn = document.getElementById("startExamBtn");
+      const emergencyBtn = document.getElementById("emergencyBtn");
+      const statusText = document.getElementById("statusText");
+      const statusBox = document.getElementById("statusBox");
+
+      let examInProgress = false;
+
+      function updateStatus(message, showLoading = false) {
+        if (showLoading) {
+          statusText.innerHTML = `<span class="loading"></span>${message}`;
+        } else {
+          statusText.textContent = message;
+        }
+      }
+
+      function setButtonsEnabled(enabled) {
+        startExamBtn.disabled = !enabled;
+        emergencyBtn.disabled = !enabled;
+      }
+
+      startExamBtn.addEventListener("click", async () => {
+        if (examInProgress) return;
+
+        examInProgress = true;
+        setButtonsEnabled(false);
+        updateStatus("Initializing exam setup...", true);
+
+        try {
+          const result = await ipcRenderer.invoke("start-exam-setup");
+
+          if (result.success) {
+            updateStatus(
+              "Exam started successfully! Safe Exam Browser is launching..."
+            );
+          } else {
+            updateStatus(`Error: ${result.error}`);
+            examInProgress = false;
+            setButtonsEnabled(true);
+          }
+        } catch (error) {
+          updateStatus(`Unexpected error: ${error.message}`);
+          examInProgress = false;
+          setButtonsEnabled(true);
+        }
+      });
+
+      emergencyBtn.addEventListener("click", async () => {
+        const confirmed = confirm(
+          "This will restore all system settings to normal.\n\nAre you sure you want to continue?"
+        );
+        if (!confirmed) return;
+
+        setButtonsEnabled(false);
+        updateStatus("Performing emergency restore...", true);
+
+        try {
+          const result = await ipcRenderer.invoke("emergency-restore");
+
+          if (result.success) {
+            updateStatus("Emergency restore completed successfully!");
+            setTimeout(() => {
+              updateStatus(
+                "Your computer has been restored to normal operation."
+              );
+            }, 2000);
+          } else {
+            updateStatus(`Restore error: ${result.error}`);
+          }
+        } catch (error) {
+          updateStatus(`Restore failed: ${error.message}`);
+        }
+
+        setButtonsEnabled(true);
+        examInProgress = false;
+      });
+
+      // Listen for status updates from main process
+      ipcRenderer.on("status-update", (event, message) => {
+        updateStatus(message, true);
+      });
+
+      ipcRenderer.on("admin-check-passed", () => {
+        updateStatus(
+          "Administrator privileges confirmed. Ready to start exam."
+        );
+      });
+
+      // Handle app closing during exam
+      window.addEventListener("beforeunload", (event) => {
+        if (examInProgress) {
+          event.preventDefault();
+          event.returnValue = "";
+          return "Exam is in progress. Are you sure you want to close?";
+        }
+      });
+    </script>
+  </body>
+</html> -->
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline';">
+    <title>Secure Exam Launcher - TESTING MODE</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 50%, #fecfef 100%);
+            color: #333;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            max-width: 800px;
+            width: 90%;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 40px;
+            border-radius: 20px;
+            backdrop-filter: blur(15px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            border: 3px solid #ff6b6b;
+        }
+
+        .test-banner {
+            background: #ff6b6b;
+            color: white;
+            padding: 10px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-weight: bold;
+            font-size: 18px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+
+        .logo {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            font-size: 28px;
+            margin-bottom: 20px;
+            font-weight: 300;
+            color: #333;
+        }
+
+        .description {
+            font-size: 16px;
+            margin-bottom: 30px;
+            line-height: 1.6;
+            color: #666;
+        }
+
+        .status-box {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            font-weight: 500;
+            color: #495057;
+        }
+
+        .button {
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 18px;
+            border-radius: 50px;
+            cursor: pointer;
+            margin: 10px;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .button:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .button.emergency {
+            background: linear-gradient(45deg, #f44336, #d32f2f);
+        }
+
+        .features {
+            margin-top: 30px;
+            text-align: left;
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+        }
+
+        .features h3 {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 20px;
+            color: #333;
+        }
+
+        .features ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .features li {
+            padding: 8px 0;
+            padding-left: 25px;
+            position: relative;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .features li:before {
+            content: "🧪";
+            position: absolute;
+            left: 0;
+            font-size: 16px;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(76, 175, 80, 0.3);
+            border-radius: 50%;
+            border-top-color: #4CAF50;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .log-area {
+            background: #000;
+            color: #00ff00;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            height: 200px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            text-align: left;
+        }
+
+        .log-entry {
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="test-banner">
+            🧪 TESTING MODE - NO ACTUAL SYSTEM CHANGES WILL BE MADE 🧪
+        </div>
+        
+        <div class="logo">🔒</div>
+        <h1>Secure Exam Launcher (Test Version)</h1>
+        <div class="description">
+            This is a SAFE TESTING VERSION that simulates the exam security process without making any actual changes to your system.
+            Perfect for testing before deployment!
+        </div>
+        
+        <div class="status-box" id="statusBox">
+            <span id="statusText">Ready to start test simulation</span>
+        </div>
+        
+        <div id="mainButtons">
+            <button class="button" id="startExamBtn">🧪 Start Test Simulation</button>
+            <button class="button emergency" id="emergencyBtn">🔧 Test Emergency Restore</button>
+        </div>
+
+        <div class="log-area" id="logArea">
+            <div class="log-entry">TEST MODE: Application started safely</div>
+            <div class="log-entry">TEST MODE: No system changes will be made</div>
+            <div class="log-entry">TEST MODE: Ready for simulation...</div>
+        </div>
+        
+        <div class="features">
+            <h3>What This Test Version Simulates</h3>
+            <ul>
+                <li>System backup creation (simulated)</li>
+                <li>USB device blocking (simulated)</li>
+                <li>Task Manager disabling (simulated)</li>
+                <li>Registry Editor blocking (simulated)</li>
+                <li>Network restrictions (simulated)</li>
+                <li>Bluetooth disabling (simulated)</li>
+                <li>Remote desktop app termination (simulated)</li>
+                <li>Safe Exam Browser launch (simulated)</li>
+                <li>System restoration (simulated)</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+        
+        const startExamBtn = document.getElementById('startExamBtn');
+        const emergencyBtn = document.getElementById('emergencyBtn');
+        const statusText = document.getElementById('statusText');
+        const logArea = document.getElementById('logArea');
+        
+        let examInProgress = false;
+
+        function addLogEntry(message) {
+            const logEntry = document.createElement('div');
+            logEntry.className = 'log-entry';
+            logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logArea.appendChild(logEntry);
+            logArea.scrollTop = logArea.scrollHeight;
+        }
+
+        function updateStatus(message, showLoading = false) {
+            if (showLoading) {
+                statusText.innerHTML = `<span class="loading"></span>${message}`;
+            } else {
+                statusText.textContent = message;
+            }
+            addLogEntry(message);
+        }
+
+        function setButtonsEnabled(enabled) {
+            startExamBtn.disabled = !enabled;
+            emergencyBtn.disabled = !enabled;
+        }
+
+        startExamBtn.addEventListener('click', async () => {
+            if (examInProgress) return;
+            
+            examInProgress = true;
+            setButtonsEnabled(false);
+            updateStatus('TEST MODE: Initializing exam setup simulation...', true);
+            
+            try {
+                const result = await ipcRenderer.invoke('start-exam-setup');
+                
+                if (result.success) {
+                    updateStatus('TEST MODE: Simulation started successfully!');
+                } else {
+                    updateStatus(`TEST MODE: Simulation error - ${result.error}`);
+                    examInProgress = false;
+                    setButtonsEnabled(true);
+                }
+            } catch (error) {
+                updateStatus(`TEST MODE: Unexpected error - ${error.message}`);
+                examInProgress = false;
+                setButtonsEnabled(true);
+            }
+        });
+
+        emergencyBtn.addEventListener('click', async () => {
+            setButtonsEnabled(false);
+            updateStatus('TEST MODE: Performing emergency restore simulation...', true);
+            
+            try {
+                const result = await ipcRenderer.invoke('emergency-restore');
+                
+                if (result.success) {
+                    updateStatus('TEST MODE: Emergency restore simulation completed!');
+                } else {
+                    updateStatus(`TEST MODE: Restore simulation error - ${result.error}`);
+                }
+            } catch (error) {
+                updateStatus(`TEST MODE: Restore simulation failed - ${error.message}`);
+            }
+            
+            setButtonsEnabled(true);
+        });
+
+        // Listen for status updates from main process
+        ipcRenderer.on('status-update', (event, message) => {
+            updateStatus(message, true);
+        });
+
+        ipcRenderer.on('restriction-step', (event, step) => {
+            addLogEntry(`TEST MODE: Simulating - ${step}`);
+        });
+
+        ipcRenderer.on('restore-step', (event, step) => {
+            addLogEntry(`TEST MODE: Simulating restore - ${step}`);
+        });
+
+        ipcRenderer.on('test-mode-active', () => {
+            addLogEntry('TEST MODE: Safe testing environment confirmed');
+            updateStatus('TEST MODE: Safe testing environment active');
+        });
+
+        ipcRenderer.on('test-cancelled', () => {
+            examInProgress = false;
+            setButtonsEnabled(true);
+            updateStatus('TEST MODE: Simulation cancelled by user');
+        });
+
+        ipcRenderer.on('test-complete', () => {
+            examInProgress = false;
+            setButtonsEnabled(true);
+            updateStatus('TEST MODE: Full simulation cycle completed successfully!');
+            addLogEntry('TEST MODE: All systems would be restored in real mode');
+        });
+
+        // Initialize
+        addLogEntry('TEST MODE: Interface loaded successfully');
+    </script>
+</body>
+</html>

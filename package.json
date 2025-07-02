@@ -1,0 +1,43 @@
+{
+  "name": "secure-exam-launcher",
+  "version": "1.0.0",
+  "description": "Secure Exam Launcher - Production Ready",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win portable"
+  },
+  "author": "Your Name",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.0.0"
+  },
+  "build": {
+    "appId": "com.yourorg.secure-exam-launcher",
+    "productName": "SecureExamLauncher",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "index.html",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "exam_config.seb",
+        "to": "exam_config.seb"
+      }
+    ],
+    "win": {
+      "target": "portable",
+      "requestedExecutionLevel": "requireAdministrator",
+      "sign": false
+    },
+    "portable": {
+      "artifactName": "SecureExamLauncher.exe"
+    },
+    "compression": "maximum"
+  }
+}
