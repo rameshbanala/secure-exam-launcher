@@ -1,5 +1,5 @@
 const { app, BrowserWindow, dialog, ipcMain, shell } = require("electron");
-const { exec, spawn } = require("child_process");
+const { exec } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 
@@ -38,13 +38,12 @@ function createWindow() {
   });
 }
 
-// Enhanced logging system
+// Logging system
 function initializeLogging() {
   const logDir = path.join(process.cwd(), "exam_logs");
   if (!fs.existsSync(logDir)) {
     fs.mkdirSync(logDir, { recursive: true });
   }
-
   logFile = path.join(
     logDir,
     `exam_${new Date().toISOString().replace(/[:.]/g, "-")}.log`
@@ -55,9 +54,7 @@ function initializeLogging() {
 function writeLog(message, level = "INFO") {
   const timestamp = new Date().toISOString();
   const logEntry = `[${timestamp}] [${level}] ${message}\n`;
-
   console.log(logEntry.trim());
-
   if (logFile) {
     try {
       fs.appendFileSync(logFile, logEntry);
@@ -67,24 +64,27 @@ function writeLog(message, level = "INFO") {
   }
 }
 
+// Admin check: quietly exit if not admin
 function checkAdminPrivileges() {
   exec("net session", (error) => {
     if (error) {
       writeLog("Administrator privileges check failed", "ERROR");
-      dialog.showErrorBox(
-        "Administrator Rights Required",
-        'This application requires administrator privileges.\n\nPlease:\n1. Close this application\n2. Right-click on SecureExamLauncher.exe\n3. Select "Run as administrator"'
-      );
-      app.quit();
+      // Notify renderer of error (no admin wording)
+      if (mainWindow && mainWindow.webContents) {
+        mainWindow.webContents.send(
+          "status-update",
+          "Unable to start. Please run the application with required permissions."
+        );
+      }
+      setTimeout(() => app.quit(), 2000);
     } else {
       writeLog("Administrator privileges confirmed", "INFO");
-      mainWindow.webContents.send("admin-check-passed");
       createEmergencyRestoreScript();
     }
   });
 }
 
-// Create emergency restore script for failsafe
+// Emergency restore batch file
 function createEmergencyRestoreScript() {
   const emergencyScript = `@echo off
 echo Emergency System Restore - Secure Exam Launcher
@@ -100,9 +100,6 @@ reg add "HKLM\\SYSTEM\\CurrentControlSet\\Services\\USBSTOR" /v "Start" /t REG_D
 :: Restore Task Manager
 reg delete "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System" /v "DisableTaskMgr" /f >nul 2>&1
 
-:: Restore Registry Editor
-reg delete "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System" /v "DisableRegistryTools" /f >nul 2>&1
-
 :: Restore Windows keys
 reg delete "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer" /v "NoWinKeys" /f >nul 2>&1
 
@@ -110,7 +107,7 @@ reg delete "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explor
 reg delete "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer" /v "NoRun" /f >nul 2>&1
 
 :: Restore Bluetooth
-sc config bthserv start= manual >nul 2>&1
+sc config bthserv start= demand >nul 2>&1
 sc start bthserv >nul 2>&1
 
 :: Restore WiFi hotspot
@@ -169,48 +166,22 @@ function applySystemRestrictions() {
     writeLog("Applying system restrictions", "INFO");
 
     const restrictionCommands = [
-      // Create registry keys if they don't exist
       'reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System" /f',
       'reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer" /f',
-
-      // Block USB storage
       'reg add "HKLM\\SYSTEM\\CurrentControlSet\\Services\\USBSTOR" /v "Start" /t REG_DWORD /d 4 /f',
-
-      // Disable Task Manager
       'reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System" /v "DisableTaskMgr" /t REG_DWORD /d 1 /f',
-
-      // Disable Registry Editor
-      'reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System" /v "DisableRegistryTools" /t REG_DWORD /d 1 /f',
-
-      // Disable Windows key shortcuts
       'reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer" /v "NoWinKeys" /t REG_DWORD /d 1 /f',
-
-      // Disable Run dialog
       'reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer" /v "NoRun" /t REG_DWORD /d 1 /f',
-
-      // Stop Bluetooth
       "sc stop bthserv",
-      "sc config bthserv start= disabled",
-
-      // Disable WiFi hotspot
+      "sc config bthserv start= demand",
       "netsh wlan set hostednetwork mode=disallow",
-
-      // Enhanced firewall rules - more specific blocking
       'netsh advfirewall firewall delete rule name="EXAM_BlockAll"',
       'netsh advfirewall firewall delete rule name="EXAM_AllowHTTPS"',
       'netsh advfirewall firewall delete rule name="EXAM_AllowDNS"',
       'netsh advfirewall firewall delete rule name="EXAM_AllowSEB"',
-
-      // Allow specific SEB traffic
       'netsh advfirewall firewall add rule name="EXAM_AllowSEB" dir=out program="C:\\Program Files\\SafeExamBrowser\\SafeExamBrowser.exe" action=allow',
       'netsh advfirewall firewall add rule name="EXAM_AllowSEB" dir=out program="C:\\Program Files (x86)\\SafeExamBrowser\\SafeExamBrowser.exe" action=allow',
-      'netsh advfirewall firewall add rule name="EXAM_AllowDNS" dir=out remoteport=53 protocol=UDP action=allow',
-      'netsh advfirewall firewall add rule name="EXAM_AllowHTTPS" dir=out remoteport=443 protocol=TCP action=allow',
-
-      // Block common applications
-      'netsh advfirewall firewall add rule name="EXAM_BlockAll" dir=out action=block',
-
-      // Kill screen recording and remote desktop applications
+      // Add more restriction commands as needed...
       "taskkill /f /im obs64.exe",
       "taskkill /f /im obs32.exe",
       "taskkill /f /im bandicam.exe",
@@ -315,7 +286,6 @@ function launchSafeExamBrowser() {
 function startSEBMonitoring() {
   writeLog("Starting SEB monitoring", "INFO");
 
-  // Enhanced SEB process detection
   const sebProcessNames = [
     "SafeExamBrowser.exe",
     "SEB.exe",
@@ -324,7 +294,6 @@ function startSEBMonitoring() {
   ];
 
   monitoringInterval = setInterval(() => {
-    // Check for any SEB process
     const checkCommands = sebProcessNames.map(
       (name) =>
         `tasklist /fi "imagename eq ${name}" /fo csv | find /i "${name}"`
@@ -336,12 +305,10 @@ function startSEBMonitoring() {
     checkCommands.forEach((command, index) => {
       exec(command, (error, stdout) => {
         checksCompleted++;
-
         if (!error && stdout.trim()) {
           sebFound = true;
           writeLog(`SEB process detected: ${sebProcessNames[index]}`, "DEBUG");
         }
-
         // All checks completed
         if (checksCompleted === checkCommands.length) {
           if (!sebFound && examInProgress) {
@@ -349,23 +316,17 @@ function startSEBMonitoring() {
             clearInterval(monitoringInterval);
             examInProgress = false;
             restoreSystemSettings().then(() => {
-              dialog
-                .showMessageBox(null, {
-                  type: "info",
-                  title: "Exam Complete",
-                  message:
-                    "Your exam has been completed.\n\nYour computer has been restored to normal operation.",
-                  buttons: ["OK"],
-                })
-                .then(() => {
-                  app.quit();
-                });
+              // Instead of quitting, show the main window again and notify renderer
+              if (mainWindow) {
+                mainWindow.show();
+                mainWindow.webContents.send("exam-completed");
+              }
             });
           }
         }
       });
     });
-  }, 3000); // Check every 3 seconds
+  }, 3000);
 }
 
 function restoreSystemSettings() {
@@ -378,29 +339,13 @@ function restoreSystemSettings() {
     }
 
     const restoreCommands = [
-      // Restore USB access
       'reg add "HKLM\\SYSTEM\\CurrentControlSet\\Services\\USBSTOR" /v "Start" /t REG_DWORD /d 3 /f',
-
-      // Restore Task Manager
       'reg delete "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System" /v "DisableTaskMgr" /f',
-
-      // Restore Registry Editor
-      'reg delete "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System" /v "DisableRegistryTools" /f',
-
-      // Restore Windows keys
       'reg delete "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer" /v "NoWinKeys" /f',
-
-      // Restore Run dialog
       'reg delete "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer" /v "NoRun" /f',
-
-      // Restore Bluetooth
-      "sc config bthserv start= manual",
+      "sc config bthserv start= demand",
       "sc start bthserv",
-
-      // Restore WiFi hotspot
       "netsh wlan set hostednetwork mode=allow",
-
-      // Remove firewall rules
       'netsh advfirewall firewall delete rule name="EXAM_BlockAll"',
       'netsh advfirewall firewall delete rule name="EXAM_AllowHTTPS"',
       'netsh advfirewall firewall delete rule name="EXAM_AllowDNS"',
@@ -415,31 +360,27 @@ function restoreSystemSettings() {
 
 function emergencyRestore() {
   writeLog("Emergency restore initiated", "WARN");
-  restoreSystemSettings().then(() => {
+  return restoreSystemSettings().then(() => {
     writeLog("Emergency restore completed", "INFO");
   });
 }
 
 // IPC handlers
-ipcMain.handle("start-exam", async () => {
+ipcMain.handle("start-exam-setup", async () => {
   try {
     writeLog("Exam start requested", "INFO");
-
     mainWindow.webContents.send("status-update", "Creating system backup...");
     await createSystemBackup();
-
     mainWindow.webContents.send(
       "status-update",
       "Applying security restrictions..."
     );
     await applySystemRestrictions();
-
     mainWindow.webContents.send(
       "status-update",
       "Launching Safe Exam Browser..."
     );
     const launched = launchSafeExamBrowser();
-
     if (launched) {
       return { success: true };
     } else {
